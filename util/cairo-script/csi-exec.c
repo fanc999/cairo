@@ -53,7 +53,9 @@ int
 main (int argc, char **argv)
 {
     const cairo_script_interpreter_hooks_t hooks = {
-	.surface_create = _surface_create
+      NULL,
+	  _surface_create,
+      NULL,
     };
     cairo_script_interpreter_t *csi;
     int i;
