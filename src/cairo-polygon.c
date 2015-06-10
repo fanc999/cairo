@@ -293,7 +293,8 @@ _add_edge (cairo_polygon_t *polygon,
 {
     cairo_edge_t *edge;
 
-    assert (top < bottom);
+    if (top != 0 && bottom != 0)
+      assert (top < bottom);
 
     if (unlikely (polygon->num_edges == polygon->edges_size)) {
 	if (! _cairo_polygon_grow (polygon))
