@@ -314,22 +314,24 @@ main (int argc, char **argv)
 {
     cairo_script_interpreter_t *csi;
     cairo_script_interpreter_hooks_t hooks = {
+      NULL,
 #if SINGLE_SURFACE
-	.surface_create = _similar_surface_create,
-	.context_create = _context_create,
-	.context_destroy = _context_destroy
+	  _similar_surface_create,
+      NULL,
+	  _context_create,
+	  _context_destroy,
 #elif CAIRO_HAS_XLIB_XRENDER_SURFACE
-	.surface_create = _xrender_surface_create
+	_xrender_surface_create,
 #elif CAIRO_HAS_XLIB_SURFACE
-	.surface_create = _xlib_surface_create
+	_xlib_surface_create,
 #elif CAIRO_PDF_SURFACE
-	.surface_create = _pdf_surface_create
+	_pdf_surface_create,
 #elif CAIRO_PS_SURFACE
-	.surface_create = _ps_surface_create
+	_ps_surface_create,
 #elif CAIRO_SVG_SURFACE
-	.surface_create = _svg_surface_create
+	_svg_surface_create,
 #else
-	.surface_create = _image_surface_create
+	_image_surface_create,
 #endif
     };
     int i;
