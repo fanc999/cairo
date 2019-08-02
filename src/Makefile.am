@@ -3,6 +3,16 @@
 include $(top_srcdir)/build/Makefile.am.common
 include $(srcdir)/Makefile.am.features
 
+# Pulled out from Makefile.sources to make it sharable with NMake
+cairo_private += $(_cairo_font_subset_private)
+cairo_sources += $(_cairo_font_subset_sources)
+cairo_private += $(_cairo_pdf_operators_private)
+cairo_sources += $(_cairo_pdf_operators_sources)
+cairo_sources += $(_cairo_deflate_stream_sources)
+cairo_egl_sources += cairo-egl-context.c
+cairo_glx_sources += cairo-glx-context.c
+cairo_wgl_sources += cairo-wgl-context.c
+
 EXTRA_DIST += Makefile.win32      Makefile.win32.features
 #MAINTAINERCLEANFILES += $(srcdir)/Makefile.win32.features
 
