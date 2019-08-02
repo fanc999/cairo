@@ -6,6 +6,16 @@ else
 include $(top_srcdir)/src/Makefile.sources
 endif
 
+# Pulled out from Makefile.sources to make it sharable with NMake
+cairo_private += $(_cairo_font_subset_private)
+cairo_sources += $(_cairo_font_subset_sources)
+cairo_private += $(_cairo_pdf_operators_private)
+cairo_sources += $(_cairo_pdf_operators_sources)
+cairo_sources += $(_cairo_deflate_stream_sources)
+cairo_egl_sources += cairo-egl-context.c
+cairo_glx_sources += cairo-glx-context.c
+cairo_wgl_sources += cairo-wgl-context.c
+
 supported_cairo_headers = $(cairo_headers)
 unsupported_cairo_headers =
 all_cairo_headers = $(cairo_headers)
