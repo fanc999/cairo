@@ -37,11 +37,12 @@
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#include <errno.h>
 #endif
 #if HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
+
+#include <errno.h>
 
 #include "cairo-test.h"
 #include "buffer-diff.h"
