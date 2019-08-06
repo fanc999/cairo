@@ -1,4 +1,4 @@
-test_sources = \
+test_sources_1 = \
 	a1-bug.c					\
 	a1-clip.c					\
 	a1-fill.c					\
@@ -92,7 +92,9 @@ test_sources = \
 	create-from-png.c				\
 	create-from-png-stream.c			\
 	culled-glyphs.c					\
-	curve-to-as-line-to.c				\
+	curve-to-as-line-to.c
+
+test_sources_2 =			\
 	dash-caps-joins.c				\
 	dash-curve.c					\
 	dash-infinite-loop.c				\
@@ -157,7 +159,9 @@ test_sources = \
 	group-clip.c					\
 	group-paint.c					\
 	group-state.c					\
-	group-unaligned.c				\
+	group-unaligned.c
+
+test_sources_3 =			\
 	half-coverage.c					\
 	halo.c						\
 	hatchings.c					\
@@ -223,7 +227,9 @@ test_sources = \
 	move-to-show-surface.c				\
 	negative-stride-image.c				\
 	new-sub-path.c					\
-	nil-surface.c					\
+	nil-surface.c
+
+test_sources_4 =			\
 	operator.c					\
 	operator-alpha.c				\
 	operator-alpha-alpha.c				\
@@ -258,7 +264,9 @@ test_sources = \
 	png.c						\
 	push-group.c					\
 	push-group-color.c				\
-	push-group-path-offset.c			\
+	push-group-path-offset.c
+
+test_sources_5 =		\
 	radial-gradient.c				\
 	radial-gradient-extend.c			\
 	radial-outer-focus.c				\
@@ -350,6 +358,8 @@ test_sources = \
 	surface-pattern-scale-down.c			\
 	surface-pattern-scale-down-extend.c		\
 	surface-pattern-scale-up.c			\
+
+test_sources_6 =	\
 	text-antialias.c				\
 	text-antialias-subpixel.c			\
 	text-cache-crash.c				\
@@ -391,6 +401,14 @@ test_sources = \
 	xlib-expose-event.c 				\
 	zero-alpha.c					\
 	zero-mask.c
+
+test_sources =	\
+	$(test_sources_1)	\
+	$(test_sources_2)	\
+	$(test_sources_3)	\
+	$(test_sources_4)	\
+	$(test_sources_5)	\
+	$(test_sources_6)
 
 pthread_test_sources =					\
 	pthread-same-source.c				\
