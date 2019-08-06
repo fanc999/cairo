@@ -37,8 +37,8 @@
 
 #ifdef HAVE_UNISTD_H
 #include <unistd.h>
-#include <errno.h>
 #endif
+#include <errno.h>
 #if HAVE_SYS_STAT_H
 #include <sys/stat.h>
 #endif
