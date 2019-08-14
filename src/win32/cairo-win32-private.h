@@ -44,6 +44,15 @@
 #include "cairo-surface-clipper-private.h"
 #include "cairo-surface-private.h"
 
+#ifdef CAIRO_WIN32_DIRECT2D
+/* We want to use the C parts of DirectX here */
+# define COBJMACROS
+# include <d3d11.h>
+# include <d2d1_1.h>
+# include <dxgi.h>
+# include <wincodec.h>
+#endif
+
 #ifndef SHADEBLENDCAPS
 #define SHADEBLENDCAPS 120
 #endif
@@ -121,6 +130,7 @@ typedef struct _cairo_win32_surface {
      * this, which will not be fiddled with externally.
      */
     int x_ofs, y_ofs;
+	cairo_bool_t is_d2d;
 } cairo_win32_surface_t;
 #define to_win32_surface(S) ((cairo_win32_surface_t *)(S))
 
@@ -186,6 +196,19 @@ typedef struct _cairo_win32_device {
     const cairo_compositor_t *compositor;
 
     cairo_win32_alpha_blend_func_t alpha_blend;
+
+    cairo_bool_t fallback_gdi;
+
+    /* The following will require Windows 7 with the platform update, for Direct2D 1.1 */
+#ifdef CAIRO_WIN32_DIRECT2D
+    ID2D1Factory1 *d2d_factory;
+    ID2D1Device *d2d_device;
+    ID2D1DeviceContext *d2d_device_ctx;
+    ID3D11Device *d3d_device;
+    ID3D11DeviceContext *d3d_device_ctx;
+    IDXGIDevice  *dxgi_device;
+    IWICImagingFactory *wic_factory;
+#endif
 } cairo_win32_device_t;
 #define to_win32_device(D) ((cairo_win32_device_t *)(D))
 #define to_win32_device_from_surface(S) to_win32_device(((cairo_surface_t *)(S))->device)

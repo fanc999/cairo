@@ -99,6 +99,22 @@
 
 static const cairo_surface_backend_t cairo_win32_display_surface_backend;
 
+#ifdef CAIRO_WIN32_DIRECT2D
+static cairo_status_t
+_create_d2d_render_bitmap (cairo_win32_display_surface_t *surface,
+                           /* xxx ,*/
+                           cairo_format_t                 format,
+                           int                            width,
+                           int                            height,
+                           unsigned char                **bits_out,
+                           int                           *rowstride_out)
+{
+    cairo_status_t status;
+    return status;
+}
+
+#endif
+
 static cairo_status_t
 _create_dc_and_bitmap (cairo_win32_display_surface_t *surface,
 		       HDC                    original_dc,
@@ -1003,6 +1019,7 @@ cairo_win32_surface_create_with_format (HDC hdc, cairo_format_t format)
     surface->win32.format = format;
 
     surface->win32.dc = hdc;
+    surface->win32.is_d2d = FALSE;
     surface->bitmap = NULL;
     surface->is_dib = FALSE;
     surface->saved_dc_bitmap = NULL;
@@ -1144,4 +1161,63 @@ FINISH:
 	ReleaseDC (NULL, screen_dc);
 
     return &new_surf->win32.base;
+}
+
+/**
+ * cairo_win32_surface_create_from_hwnd:
+ * @hwnd: the HWND to create a surface for
+ *
+ * Creates a cairo surface that targets the given HWND.  The HWND will be
+ * queried for its initial clip extents, and this will be used as the
+ * size of the cairo surface.  The resulting surface will always be of
+ * format %CAIRO_FORMAT_RGB24; should you need another surface format,
+ * you will need to create one through
+ * cairo_win32_surface_create_from_hwnd_with_format()
+ *
+ * Return value: the newly created surface, NULL on failure
+ *
+ * Since: 1.0
+ **/
+cairo_surface_t *
+cairo_win32_surface_create_from_hwnd (HWND hwnd)
+{
+    return cairo_win32_surface_create_from_hwnd_with_format (hwnd, CAIRO_FORMAT_RGB24);
+}
+
+/**
+ * cairo_win32_surface_create_from_hwnd_with_format:
+ * @hwnd: the HWND to create a surface for
+ * @format: format of pixels in the surface to create
+ *
+ * Creates a cairo surface that targets the given HWND.  The HWND will be
+ * queried for its initial clip extents, and this will be used as the
+ * size of the cairo surface.
+ *
+ * Supported formats are:
+ * %CAIRO_FORMAT_ARGB32
+ * %CAIRO_FORMAT_RGB24
+ *
+ * Note: @format only tells cairo how to draw on the surface, not what
+ * the format of the surface is. Namely, cairo does not (and cannot)
+ * check that @hwnd actually supports alpha-transparency.
+ *
+ * Return value: the newly created surface, NULL on failure
+ *
+ * Since: 1.18
+ **/
+cairo_surface_t *
+cairo_win32_surface_create_from_hwnd_with_format (HWND hwnd, cairo_format_t format)
+{
+    cairo_device_t *device = _cairo_win32_device_get ();
+    cairo_win32_device_t *device_win32 = to_win32_device (device);
+
+    if (device_win32->fallback_gdi)
+      {
+        HDC hdc = GetDC (hwnd);
+        return cairo_win32_surface_create_with_format (hdc, format);
+      }
+    else
+      {
+        /* Create Direct2D surface */
+      }
 }
