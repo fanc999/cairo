@@ -53,6 +53,13 @@ cairo_win32_surface_create_with_format (HDC hdc,
                                         cairo_format_t format);
 
 cairo_public cairo_surface_t *
+cairo_win32_surface_create_from_hwnd (HWND hwnd);
+
+cairo_public cairo_surface_t *
+cairo_win32_surface_create_from_hwnd_with_format (HWND hwnd,
+                                                  cairo_format_t format);
+
+cairo_public cairo_surface_t *
 cairo_win32_printing_surface_create (HDC hdc);
 
 cairo_public cairo_surface_t *

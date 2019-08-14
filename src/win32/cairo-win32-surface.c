@@ -91,6 +91,44 @@
  * Since: 1.0
  **/
 
+static void
+_cairo_win32_print_system_error (const char   *context,
+                                 cairo_bool_t  is_gdi,
+                                 HRESULT       hr)
+{
+  void *lpMsgBuf;
+  DWORD last_error;
+  char error_type[4];
+
+  if (is_gdi)
+    {
+      last_error = GetLastError ();
+      strcpy (error_type, "GDI");
+    }
+  else
+    {
+      last_error = HRESULT_FACILITY (hr) == FACILITY_WINDOWS ? HRESULT_CODE (hr) : hr;
+      strcpy (error_type, "COM");
+    }
+
+  if (!FormatMessageW (FORMAT_MESSAGE_ALLOCATE_BUFFER |
+                       FORMAT_MESSAGE_FROM_SYSTEM,
+                       NULL,
+                       last_error,
+                       MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),
+                       (LPWSTR) &lpMsgBuf,
+                       0, NULL))
+    fprintf (stderr, "%s: Unknown %s error", context, error_type);
+  else
+    {
+      fprintf (stderr, "%s: %S", context, (wchar_t *)lpMsgBuf);
+
+      LocalFree (lpMsgBuf);
+    }
+
+  fflush (stderr);
+}
+
 /**
  * _cairo_win32_print_gdi_error:
  * @context: context string to display along with the error
@@ -103,24 +141,7 @@
 cairo_status_t
 _cairo_win32_print_gdi_error (const char *context)
 {
-    void *lpMsgBuf;
-    DWORD last_error = GetLastError ();
-
-    if (!FormatMessageW (FORMAT_MESSAGE_ALLOCATE_BUFFER |
-			 FORMAT_MESSAGE_FROM_SYSTEM,
-			 NULL,
-			 last_error,
-			 MAKELANGID (LANG_NEUTRAL, SUBLANG_DEFAULT),
-			 (LPWSTR) &lpMsgBuf,
-			 0, NULL)) {
-	fprintf (stderr, "%s: Unknown GDI error", context);
-    } else {
-	fprintf (stderr, "%s: %S", context, (wchar_t *)lpMsgBuf);
-
-	LocalFree (lpMsgBuf);
-    }
-
-    fflush (stderr);
+    _cairo_win32_print_system_error (context, TRUE, 0);
 
     return _cairo_error (CAIRO_STATUS_WIN32_GDI_ERROR);
 }
@@ -155,8 +176,14 @@ _cairo_win32_surface_get_extents (void		          *abstract_surface,
 HDC
 cairo_win32_surface_get_dc (cairo_surface_t *surface)
 {
+    cairo_win32_device_t *device;
+
     if (surface->backend->type == CAIRO_SURFACE_TYPE_WIN32)
-	return to_win32_surface(surface)->dc;
+      {
+        device = to_win32_device_from_surface (surface);
+
+        return to_win32_surface(surface)->dc;
+      }
 
     if (_cairo_surface_is_paginated (surface)) {
 	cairo_surface_t *target = _cairo_paginated_surface_get_target (surface);
@@ -198,13 +225,27 @@ _cairo_surface_is_win32 (const cairo_surface_t *surface)
 cairo_surface_t *
 cairo_win32_surface_get_image (cairo_surface_t *surface)
 {
+    cairo_win32_device_t *device;
 
     if (! _cairo_surface_is_win32 (surface)) {
         return _cairo_surface_create_in_error (_cairo_error (CAIRO_STATUS_SURFACE_TYPE_MISMATCH));
     }
 
-    GdiFlush();
+    device = to_win32_device_from_surface (surface);
+
+    if (!device->fallback_gdi)  /* reverse condition when D2D support completed */
+        GdiFlush();
+
+#ifdef CAIRO_WIN32_DIRECT2D
+	else {
+        D2D1_TAG a, b;
+
+        ID2D1DeviceContext_Flush (device->d2d_device_ctx, &a, &b);
+	}
+#endif
+
     return to_win32_display_surface(surface)->image;
+
 }
 
 #define STACK_GLYPH_SIZE 256
@@ -217,6 +258,7 @@ _cairo_win32_surface_emit_glyphs (cairo_win32_surface_t *dst,
 				  cairo_bool_t		  glyph_indexing)
 {
 #if CAIRO_HAS_WIN32_FONT
+
     WORD glyph_buf_stack[STACK_GLYPH_SIZE];
     WORD *glyph_buf = glyph_buf_stack;
     int dxy_buf_stack[2 * STACK_GLYPH_SIZE];

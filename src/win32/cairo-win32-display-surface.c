@@ -99,6 +99,296 @@
 
 static const cairo_surface_backend_t cairo_win32_display_surface_backend;
 
+#ifdef CAIRO_WIN32_DIRECT2D
+static void
+_destroy_d2d_surface_items (cairo_win32_display_surface_t *surface)
+{
+  if (surface->wic_bitmap != NULL)
+    {
+      IWICBitmap_Release (surface->wic_bitmap);
+      surface->wic_bitmap = NULL;
+    }
+
+  if (surface->d2d_bitmap != NULL)
+    {
+      ID2D1Bitmap1_Release (surface->d2d_bitmap);
+      surface->d2d_bitmap = NULL;
+    }
+
+  if (surface->swap_chain)
+    {
+      IDXGISwapChain1_Release (surface->swap_chain);
+      surface->swap_chain = NULL;
+    }
+
+  if (surface->back_buffer)
+    {
+      IDXGISurface_Release (surface->back_buffer);
+      surface->back_buffer = NULL;
+    }
+}
+
+static cairo_status_t
+_create_d2d_render_bitmap (cairo_win32_display_surface_t *surface,
+                           HWND                           hwnd,
+                           cairo_format_t                 format,
+                           int                            width,
+                           int                            height,
+                           cairo_bool_t                   is_dib,
+                           unsigned char                **bits_out,
+                           int                           *rowstride_out)
+{
+    cairo_status_t status;
+    cairo_win32_device_t *device = to_win32_device (_cairo_win32_device_get ());
+
+    HRESULT hr;
+    D2D1_BITMAP_PROPERTIES1 target_props;
+    ID2D1Bitmap1 *intermediate_bitmap;
+    ID2D1GdiInteropRenderTarget *gdi_render_target;
+    DXGI_SWAP_CHAIN_DESC1 desc;
+
+    IUnknown *d3d_device_base;
+    ID2D1Image *d2d_image_base;
+    ID2D1Bitmap *d2d_bitmap_base;
+    D2D1_TAG a, b; /* for the sake of flushing */
+    GUID wic_format;
+
+    memset (&target_props, 0, sizeof (target_props));
+    target_props.bitmapOptions = D2D1_BITMAP_OPTIONS_TARGET |
+                                 D2D1_BITMAP_OPTIONS_GDI_COMPATIBLE;
+
+    memset (&desc, 0, sizeof (desc));
+    desc.Width = 0; /* automatic sizing */
+    desc.Height = 0; /* automatic sizing */
+    desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    desc.BufferCount = 2;
+    desc.Scaling = DXGI_SCALING_NONE;
+    desc.Stereo = FALSE; /* We need to support Windows 7 */
+    desc.SwapEffect = DXGI_SWAP_EFFECT_SEQUENTIAL; /* We need to support Windows 7 */
+    desc.SampleDesc.Count = 1; /* No MultiSampling */
+    desc.SampleDesc.Quality = 0; /* No MultiSampling */
+    desc.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH |
+                 DXGI_SWAP_CHAIN_FLAG_GDI_COMPATIBLE;
+
+    switch (format)
+      {
+        case CAIRO_FORMAT_ARGB32:
+        case CAIRO_FORMAT_RGB24: /* Treat RGB24 like ARGB32, but ignore the alpha bits later, see _create_dc_and_bitmap() */
+          desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+          target_props.pixelFormat.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+          break;
+
+        case CAIRO_FORMAT_RGB30:
+          desc.Format = DXGI_FORMAT_R10G10B10A2_UNORM; /* ignore the alpha bits later */
+          target_props.pixelFormat.format = DXGI_FORMAT_R10G10B10A2_UNORM;
+          break;
+
+        case CAIRO_FORMAT_RGB16_565: /* only for Windows 8+ */
+          desc.Format = DXGI_FORMAT_B5G6R5_UNORM; /* Not supported for D2D */
+          target_props.pixelFormat.format = DXGI_FORMAT_B5G6R5_UNORM; /* Not supported for D2D */
+          break;
+
+        case CAIRO_FORMAT_A8:
+        case CAIRO_FORMAT_A1: /* check on this format later */
+          desc.Format = DXGI_FORMAT_A8_UNORM;
+          target_props.pixelFormat.format = DXGI_FORMAT_A8_UNORM;
+          break;
+
+        case CAIRO_FORMAT_INVALID:
+        default:
+          return _cairo_error (CAIRO_STATUS_INVALID_FORMAT);
+      }
+
+    switch (format)
+      {
+        case CAIRO_FORMAT_RGB24: /* Treat RGB24 like ARGB32, but ignore the alpha bits later */
+          wic_format = GUID_WICPixelFormat32bppRGB;
+        case CAIRO_FORMAT_RGB16_565: /* only for Windows 8+ */
+        case CAIRO_FORMAT_RGB30:
+          desc.AlphaMode = D2D1_ALPHA_MODE_IGNORE; /* ignore the alpha bits later */
+          target_props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_IGNORE;
+          break;
+
+        case CAIRO_FORMAT_ARGB32:
+          wic_format = GUID_WICPixelFormat32bppPRGBA;
+        case CAIRO_FORMAT_A8:
+        case CAIRO_FORMAT_A1: /* check on this format later */
+          desc.AlphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
+          target_props.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
+          wic_format = GUID_WICPixelFormat8bppAlpha;
+          break;
+
+        case CAIRO_FORMAT_INVALID:
+        default:
+          ASSERT_NOT_REACHED;
+      }
+
+    if (hwnd == NULL)
+      hwnd = GetDesktopWindow ();
+
+    hr = ID3D11Device_QueryInterface (device->d3d_device, &IID_IUnknown, &d3d_device_base);
+
+    if (SUCCEEDED (hr))
+      hr = IDXGIFactory2_CreateSwapChainForHwnd (device->dxgi_factory,
+                                                 d3d_device_base,
+                                                 hwnd,
+                                                 &desc,
+                                                 NULL,
+                                                 NULL,
+                                                 &surface->swap_chain);
+
+    if (SUCCEEDED (hr))
+      hr = IDXGISwapChain1_GetBuffer (surface->swap_chain,
+                                      0,
+                                     &IID_ID3D11Texture2D,
+                                     &surface->back_buffer);
+    else
+      surface->swap_chain = NULL;
+
+    if (SUCCEEDED (hr))
+      hr = ID2D1DeviceContext_CreateBitmapFromDxgiSurface (device->d2d_device_ctx,
+                                                           surface->back_buffer,
+                                                          &target_props,
+                                                          &surface->d2d_bitmap);
+    else
+      surface->back_buffer = NULL;
+
+    ID2D1Bitmap1_QueryInterface (surface->d2d_bitmap,
+                                &IID_ID2D1GdiInteropRenderTarget,
+                                &gdi_render_target);
+
+    ID2D1GdiInteropRenderTarget_GetDC (gdi_render_target,
+                                       D2D1_DC_INITIALIZE_MODE_COPY,
+                                      &surface->win32.dc);
+
+    if (SUCCEEDED (hr))
+      ID2D1Bitmap1_QueryInterface (surface->d2d_bitmap,
+                                  &IID_ID2D1Image,
+                                  &d2d_image_base);
+    else
+      surface->d2d_bitmap = NULL;
+
+    if (SUCCEEDED (hr))
+	  {
+        ID2D1DeviceContext_SetTarget (device->d2d_device_ctx,
+                                      d2d_image_base);
+
+        hr = ID2D1DeviceContext_Flush (device->d2d_device_ctx,
+                                       &a,
+                                       &b);
+      }
+
+    /* In Direct2D, we always have a device-dependant bitmap, but we need
+     * need to create a WIC Bitmap, which is more or less like the DIB we want
+     */
+    if (SUCCEEDED (hr) && is_dib)
+      {
+        D2D1_BITMAP_PROPERTIES1 save_props;
+        D2D1_MAPPED_RECT mapped_rect;
+        D2D_SIZE_U bitmap_size = {width, height};
+        D2D_RECT_U bitmap_rect = {0, 0, width, height};
+        D2D_POINT_2U bitmap_pt = {0, 0};
+        BYTE *image_data = _cairo_malloc (sizeof (BYTE) * width * height * 4);
+
+        memset (&save_props, 0, sizeof (save_props));
+        save_props.bitmapOptions = D2D1_BITMAP_OPTIONS_CANNOT_DRAW |
+                                   D2D1_BITMAP_OPTIONS_CPU_READ;
+
+        /* we want to save things into memory, so make sure the pixel and alpha modes are consistent */
+        save_props.pixelFormat.format = target_props.pixelFormat.format;
+        save_props.pixelFormat.alphaMode = target_props.pixelFormat.alphaMode;
+
+        hr = ID2D1DeviceContext_CreateBitmap (device->d2d_device_ctx,
+                                              bitmap_size,
+                                              NULL,
+                                              0,
+                                             &save_props,
+                                             &intermediate_bitmap);
+
+        if (SUCCEEDED (hr))
+          hr = ID2D1Bitmap1_QueryInterface (surface->d2d_bitmap,
+                                           &IID_ID2D1Bitmap,
+                                           &d2d_bitmap_base);
+
+        if (SUCCEEDED (hr))
+          hr = ID2D1Bitmap1_CopyFromBitmap (intermediate_bitmap,
+                                           &bitmap_pt,
+                                            d2d_bitmap_base,
+                                           &bitmap_rect);
+
+        if (SUCCEEDED (hr))
+          hr = ID2D1Bitmap1_Map (intermediate_bitmap,
+                                 D2D1_MAP_OPTIONS_READ,
+                                &mapped_rect);
+
+        if (SUCCEEDED (hr))
+          {
+            unsigned int stride = (width * 32 + 7) / 8;  /* stride = (width * bpp + 7) / 8 */
+
+            memcpy (image_data, mapped_rect.bits, width * height * 4);
+            ID2D1Bitmap1_Unmap (intermediate_bitmap);
+
+            hr = IWICImagingFactory_CreateBitmapFromMemory (device->wic_factory,
+                                                            width,
+                                                            height,
+                                                           &wic_format,
+                                                            stride,
+                                                            stride * width,
+                                                            image_data,
+                                                           &surface->wic_bitmap);
+          }
+
+        if (SUCCEEDED (hr) && bits_out)
+          *bits_out = image_data;
+        else
+          {
+            if (FAILED (hr))
+              surface->wic_bitmap = NULL;
+
+            free (image_data);
+          }
+
+        if (SUCCEEDED (hr))
+          surface->is_dib = TRUE;
+      }
+    else if (SUCCEEDED (hr))
+	  surface->is_dib = FALSE;
+
+    if (SUCCEEDED (hr) && rowstride_out)
+      {
+        /* Windows bitmaps are padded to 32-bit (dword) boundaries */
+        switch (format)
+          {
+            case CAIRO_FORMAT_INVALID:
+            case CAIRO_FORMAT_RGB16_565:
+            case CAIRO_FORMAT_RGB30:
+              ASSERT_NOT_REACHED;
+            case CAIRO_FORMAT_ARGB32:
+            case CAIRO_FORMAT_RGB24:
+              *rowstride_out = 4 * width;
+              break;
+
+            case CAIRO_FORMAT_A8:
+              *rowstride_out = (width + 3) & ~3;
+              break;
+
+            case CAIRO_FORMAT_A1:
+              *rowstride_out = ((width + 31) & ~31) / 8;
+              break;
+          }
+      }
+
+    if (SUCCEEDED (hr))
+      return CAIRO_STATUS_SUCCESS;
+    else
+      {
+        _destroy_d2d_surface_items (surface);
+        return _cairo_error (CAIRO_STATUS_DEVICE_ERROR);
+      }
+}
+
+#endif
+
 static cairo_status_t
 _create_dc_and_bitmap (cairo_win32_display_surface_t *surface,
 		       HDC                    original_dc,
@@ -596,42 +886,90 @@ _cairo_win32_display_surface_mark_dirty (void *abstract_surface,
 static cairo_int_status_t
 _cairo_win32_save_initial_clip (HDC hdc, cairo_win32_display_surface_t *surface)
 {
-    RECT rect;
-    int clipBoxType;
-    int gm;
-    XFORM saved_xform;
+    cairo_device_t *device_base = _cairo_win32_device_get ();
+    cairo_win32_device_t *device = to_win32_device (device_base);
 
-    /* GetClipBox/GetClipRgn and friends interact badly with a world transform
-     * set.  GetClipBox returns values in logical (transformed) coordinates;
-     * it's unclear what GetClipRgn returns, because the region is empty in the
-     * case of a SIMPLEREGION clip, but I assume device (untransformed) coordinates.
-     * Similarly, IntersectClipRect works in logical units, whereas SelectClipRgn
-     * works in device units.
-     *
-     * So, avoid the whole mess and get rid of the world transform
-     * while we store our initial data and when we restore initial coordinates.
-     *
-     * XXX we may need to modify x/y by the ViewportOrg or WindowOrg
-     * here in GM_COMPATIBLE; unclear.
-     */
-    gm = GetGraphicsMode (hdc);
-    if (gm == GM_ADVANCED) {
-	GetWorldTransform (hdc, &saved_xform);
-	ModifyWorldTransform (hdc, NULL, MWT_IDENTITY);
-    }
+    cairo_bool_t is_gdi = device->fallback_gdi;
+    cairo_device_destroy (device_base);
 
-    clipBoxType = GetClipBox (hdc, &rect);
-    if (clipBoxType == ERROR) {
-	_cairo_win32_print_gdi_error (__FUNCTION__);
-	SetGraphicsMode (hdc, gm);
-	/* XXX: Can we make a more reasonable guess at the error cause here? */
-	return _cairo_error (CAIRO_STATUS_DEVICE_ERROR);
-    }
+    /* device->fallback_gdi is always TRUE if D2D support is not built */
+    if (!is_gdi) /* reverse condition when D2d support completed */
+      {
+        RECT rect;
+        int clipBoxType;
+        int gm;
+        XFORM saved_xform;
 
-    surface->win32.extents.x = rect.left;
-    surface->win32.extents.y = rect.top;
-    surface->win32.extents.width = rect.right - rect.left;
-    surface->win32.extents.height = rect.bottom - rect.top;
+        /* GetClipBox/GetClipRgn and friends interact badly with a world transform
+         * set.  GetClipBox returns values in logical (transformed) coordinates;
+         * it's unclear what GetClipRgn returns, because the region is empty in the
+         * case of a SIMPLEREGION clip, but I assume device (untransformed) coordinates.
+         * Similarly, IntersectClipRect works in logical units, whereas SelectClipRgn
+         * works in device units.
+         *
+         * So, avoid the whole mess and get rid of the world transform
+         * while we store our initial data and when we restore initial coordinates.
+         *
+         * XXX we may need to modify x/y by the ViewportOrg or WindowOrg
+         * here in GM_COMPATIBLE; unclear.
+         */
+        gm = GetGraphicsMode (hdc);
+        if (gm == GM_ADVANCED) {
+          GetWorldTransform (hdc, &saved_xform);
+          ModifyWorldTransform (hdc, NULL, MWT_IDENTITY);
+        }
+
+        clipBoxType = GetClipBox (hdc, &rect);
+        if (clipBoxType == ERROR) {
+          _cairo_win32_print_gdi_error (__FUNCTION__);
+          SetGraphicsMode (hdc, gm);
+          /* XXX: Can we make a more reasonable guess at the error cause here? */
+          return _cairo_error (CAIRO_STATUS_DEVICE_ERROR);
+        }
+
+        surface->win32.extents.x = rect.left;
+        surface->win32.extents.y = rect.top;
+        surface->win32.extents.width = rect.right - rect.left;
+        surface->win32.extents.height = rect.bottom - rect.top;
+
+        surface->initial_clip_rgn = NULL;
+        surface->had_simple_clip = FALSE;
+
+        if (clipBoxType == COMPLEXREGION) {
+          surface->initial_clip_rgn = CreateRectRgn (0, 0, 0, 0);
+          if (GetClipRgn (hdc, surface->initial_clip_rgn) <= 0) {
+            DeleteObject(surface->initial_clip_rgn);
+            surface->initial_clip_rgn = NULL;
+          }
+        }
+        else if (clipBoxType == SIMPLEREGION) {
+          surface->had_simple_clip = TRUE;
+        }
+
+        if (gm == GM_ADVANCED)
+          SetWorldTransform (hdc, &saved_xform);
+	  }
+
+#ifdef CAIRO_WIN32_DIRECT2D
+    else
+      {
+        D2D_RECT_F clip_boundaries;
+        ID2D1Image *image;
+
+        ID2D1Bitmap1_QueryInterface (surface->d2d_bitmap,
+                                    &IID_ID2D1Image,
+                                    &image);
+
+        ID2D1DeviceContext_GetImageLocalBounds (device->d2d_device_ctx,
+                                                image,
+                                               &clip_boundaries);
+
+        surface->win32.extents.x = clip_boundaries.left;
+        surface->win32.extents.y = clip_boundaries.top;
+        surface->win32.extents.width = clip_boundaries.right - clip_boundaries.left;
+        surface->win32.extents.height = clip_boundaries.bottom - clip_boundaries.top;
+      }
+#endif
 
     /* On multi-monitor setup, under Windows, the primary monitor always
      * have origin (0,0).  Any monitors that extends to the left or above
@@ -661,22 +999,6 @@ _cairo_win32_save_initial_clip (HDC hdc, cairo_win32_display_surface_t *surface)
 	surface->win32.extents.x = 0;
 	surface->win32.extents.y = 0;
     }
-
-    surface->initial_clip_rgn = NULL;
-    surface->had_simple_clip = FALSE;
-
-    if (clipBoxType == COMPLEXREGION) {
-	surface->initial_clip_rgn = CreateRectRgn (0, 0, 0, 0);
-	if (GetClipRgn (hdc, surface->initial_clip_rgn) <= 0) {
-	    DeleteObject(surface->initial_clip_rgn);
-	    surface->initial_clip_rgn = NULL;
-	}
-    } else if (clipBoxType == SIMPLEREGION) {
-	surface->had_simple_clip = TRUE;
-    }
-
-    if (gm == GM_ADVANCED)
-	SetWorldTransform (hdc, &saved_xform);
 
     return CAIRO_STATUS_SUCCESS;
 }
@@ -1003,6 +1325,7 @@ cairo_win32_surface_create_with_format (HDC hdc, cairo_format_t format)
     surface->win32.format = format;
 
     surface->win32.dc = hdc;
+    surface->win32.is_d2d = FALSE;
     surface->bitmap = NULL;
     surface->is_dib = FALSE;
     surface->saved_dc_bitmap = NULL;
@@ -1144,4 +1467,63 @@ FINISH:
 	ReleaseDC (NULL, screen_dc);
 
     return &new_surf->win32.base;
+}
+
+/**
+ * cairo_win32_surface_create_from_hwnd:
+ * @hwnd: the HWND to create a surface for
+ *
+ * Creates a cairo surface that targets the given HWND.  The HWND will be
+ * queried for its initial clip extents, and this will be used as the
+ * size of the cairo surface.  The resulting surface will always be of
+ * format %CAIRO_FORMAT_RGB24; should you need another surface format,
+ * you will need to create one through
+ * cairo_win32_surface_create_from_hwnd_with_format()
+ *
+ * Return value: the newly created surface, NULL on failure
+ *
+ * Since: 1.0
+ **/
+cairo_surface_t *
+cairo_win32_surface_create_from_hwnd (HWND hwnd)
+{
+    return cairo_win32_surface_create_from_hwnd_with_format (hwnd, CAIRO_FORMAT_RGB24);
+}
+
+/**
+ * cairo_win32_surface_create_from_hwnd_with_format:
+ * @hwnd: the HWND to create a surface for
+ * @format: format of pixels in the surface to create
+ *
+ * Creates a cairo surface that targets the given HWND.  The HWND will be
+ * queried for its initial clip extents, and this will be used as the
+ * size of the cairo surface.
+ *
+ * Supported formats are:
+ * %CAIRO_FORMAT_ARGB32
+ * %CAIRO_FORMAT_RGB24
+ *
+ * Note: @format only tells cairo how to draw on the surface, not what
+ * the format of the surface is. Namely, cairo does not (and cannot)
+ * check that @hwnd actually supports alpha-transparency.
+ *
+ * Return value: the newly created surface, NULL on failure
+ *
+ * Since: 1.18
+ **/
+cairo_surface_t *
+cairo_win32_surface_create_from_hwnd_with_format (HWND hwnd, cairo_format_t format)
+{
+    cairo_device_t *device = _cairo_win32_device_get ();
+    cairo_win32_device_t *device_win32 = to_win32_device (device);
+
+    if (device_win32->fallback_gdi)
+      {
+        HDC hdc = GetDC (hwnd);
+        return cairo_win32_surface_create_with_format (hdc, format);
+      }
+    else
+      {
+        /* Create Direct2D surface */
+      }
 }

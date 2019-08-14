@@ -493,6 +493,7 @@ static cairo_bool_t check_blit (cairo_composite_rectangles_t *composite)
 	&& dst->win32.format != CAIRO_FORMAT_ARGB32)
 	return FALSE;
 
+    /* DXGI_SWAP_EFFECT_DISCARD == BitBlt */
     if (dst->win32.flags & CAIRO_WIN32_SURFACE_CAN_BITBLT)
 	return TRUE;
 

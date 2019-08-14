@@ -38,6 +38,7 @@
  */
 
 #define WIN32_LEAN_AND_MEAN
+
 /* We require Windows 2000 features such as ETO_PDY */
 #if !defined(WINVER) || (WINVER < 0x0500)
 # define WINVER 0x0500
@@ -55,13 +56,244 @@
 #include <wchar.h>
 #include <windows.h>
 
+#ifdef CAIRO_WIN32_DIRECT2D
+# include <d3d11.h>
+# include <d2d1_1.h>
+# include <dxgi.h>
+#endif
+
+#ifdef CAIRO_WIN32_DIRECT2D
+/* We may need to release the resources of the device-dependent items to
+ * re-create them as needed...
+ */
+void
+cairo_release_dx_device (cairo_win32_device_t *device)
+{
+  if (device->d2d_device_ctx != NULL)
+    {
+      ID2D1DeviceContext_Release (device->d2d_device_ctx);
+      device->d2d_device_ctx = NULL;
+    }
+
+  if (device->d2d_device)
+    {
+      ID2D1Device_Release (device->d2d_device);
+      device->d2d_device = NULL;
+    }
+
+  /* This is tied to the D3D/D2D/DXGI device, so we must release this here and re-create it when needed */
+  if (device->dxgi_factory)
+    {
+      IDXGIFactory2_Release (device->dxgi_factory);
+      device->dxgi_factory = NULL;
+    }
+
+  if (device->dxgi_adapter)
+    {
+      IDXGIAdapter_Release (device->dxgi_adapter);
+      device->dxgi_adapter = NULL;
+    }
+
+  if (device->dxgi_device)
+    {
+      IDXGIDevice_Release (device->dxgi_device);
+      device->dxgi_device = NULL;
+    }
+
+  if (device->d3d_device_ctx)
+    {
+      ID3D11DeviceContext_Release (device->d3d_device_ctx);
+      device->d3d_device_ctx = NULL;
+    }
+
+  if (device->d3d_device)
+    {
+      ID3D11Device_Release (device->d3d_device);
+      device->d3d_device = NULL;
+    }
+
+  device->is_dx_device_created = FALSE;
+}
+
+HRESULT
+cairo_create_dx_devices (cairo_win32_device_t *device)
+{
+  HRESULT hr = S_OK;
+
+  /* First, get the D3D11 device for the default display adapter */
+  /* the following flag is required for D2D compatibility */
+  UINT creationFlags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
+
+  D3D_FEATURE_LEVEL featureLevels[] =
+    {
+      D3D_FEATURE_LEVEL_11_1,
+      D3D_FEATURE_LEVEL_11_0,
+      D3D_FEATURE_LEVEL_10_1,
+      D3D_FEATURE_LEVEL_10_0,
+      D3D_FEATURE_LEVEL_9_3,
+      D3D_FEATURE_LEVEL_9_2,
+      D3D_FEATURE_LEVEL_9_1
+    };
+
+  if (device->is_dx_device_created)
+    cairo_release_dx_device (device);
+
+  hr = D3D11CreateDevice (NULL, /* default display adapter */
+                          D3D_DRIVER_TYPE_HARDWARE, /* hardware! */
+                          NULL, /* hardware! */
+                          creationFlags, /* We need to be D2D compatible */
+                          featureLevels, /* list of feature levels this app can support */
+                          7, /* number of possible feature levels */
+                          D3D11_SDK_VERSION, /* We must specify this here */
+                         &device->d3d_device, /* returns the Direct3D device created */
+                          NULL, /* returns feature level of device created (not for now) */
+                         &device->d3d_device_ctx /* returns the device immediate context */);
+
+  if (SUCCEEDED (hr))
+    /* Next, get the DXGI device that is used by the D3D11 Device */
+    hr = ID3D11Device_QueryInterface (device->d3d_device,
+                                      &IID_IDXGIDevice,
+                                      &device->dxgi_device);
+  else
+    {
+      device->d3d_device = NULL;
+      device->d3d_device_ctx = NULL;
+    }
+
+  /* Get the DXGI adapter object to get the IDXGIFactory2, we need it for the swap chain */
+  if (SUCCEEDED (hr))
+    hr = IDXGIDevice_GetAdapter (device->dxgi_device,
+                                &device->dxgi_adapter);
+  else
+    device->dxgi_device = NULL;
+
+  /* Get the IDXGIFactory2 that underlies the DX device, we need it for the swap chain */
+  if (SUCCEEDED (hr))
+    hr = IDXGIAdapter_GetParent (device->dxgi_adapter,
+                                 &IID_IDXGIFactory2,
+                                 &device->dxgi_factory);
+  else
+    device->dxgi_adapter = NULL;
+
+  if (SUCCEEDED (hr))
+    /* Now create the D2D device from the DXGI device we have */
+	hr = ID2D1Factory1_CreateDevice (device->d2d_factory,
+                                     device->dxgi_device,
+                                     &device->d2d_device);
+  else
+    device->dxgi_factory = NULL;
+
+  if (SUCCEEDED (hr))
+    /* Create the D2D device context from the D2D device, for our DXGI swapchain */
+    hr = ID2D1Device_CreateDeviceContext (device->d2d_device,
+                                          D2D1_DEVICE_CONTEXT_OPTIONS_ENABLE_MULTITHREADED_OPTIMIZATIONS,
+                                          &device->d2d_device_ctx);
+  else
+    device->d2d_device = NULL;
+
+  if (SUCCEEDED (hr))
+    device->is_dx_device_created = TRUE;
+
+  return hr;
+}
+
+void cairo_destroy_com_factories (cairo_win32_device_t *device)
+{
+  if (device->wic_factory)
+    {
+      IWICImagingFactory_Release (device->wic_factory);
+      device->wic_factory = NULL;
+    }
+
+  if (device->d2d_factory)
+    {
+      ID2D1Factory1_Release (device->d2d_factory);
+      device->d2d_factory = NULL;
+    }
+}
+
+static void
+cairo_d2d_init (cairo_win32_device_t *device)
+{
+  HRESULT hr;
+  D2D1_FACTORY_OPTIONS d2d_opt = {D2D1_DEBUG_LEVEL_NONE};
+
+  device->fallback_gdi = FALSE;
+
+  if (_wgetenv (L"CAIRO_WIN32_DISABLE_D2D"))
+    {
+      device->fallback_gdi = TRUE;
+      return;
+    }
+
+  /* This function is called just *once* */
+  device->is_dx_device_created = FALSE;
+
+  CoInitializeEx (NULL, COINIT_MULTITHREADED);
+
+  /* We are going to depend on Windows 7 with the platform update and later here... */
+  hr = D2D1CreateFactory (D2D1_FACTORY_TYPE_MULTI_THREADED, /* We want multithreaded support */
+                          &IID_ID2D1Factory1, /* We want a D2D 1.1 factory */
+                          &d2d_opt,
+                          &device->d2d_factory);
+
+  /* Create the WIC factory, we need it for adding DIB support here */
+  if (SUCCEEDED (hr))
+    hr = CoCreateInstance (&CLSID_WICImagingFactory,
+                           NULL,
+                           CLSCTX_INPROC_SERVER,
+                           &IID_IWICImagingFactory,
+                           &device->wic_factory);
+  else
+    device->d2d_factory = NULL;
+
+  if (SUCCEEDED (hr))
+    hr = cairo_create_dx_devices (device);
+  else
+    device->wic_factory = NULL;
+
+  if (SUCCEEDED (hr))
+    device->fallback_gdi = FALSE;
+  else
+    {
+      device->d2d_device_ctx = NULL;
+
+      /* on failure, destroy all D3D/DXGI/D2D/WIC items we might have created */
+	  cairo_release_dx_device (device);
+      cairo_destroy_com_factories (device);
+
+      device->fallback_gdi = TRUE;
+    }
+}
+#else
+/* do nothing when Direct2D is not enabled besides enforcing GDI! */
+static void
+cairo_d2d_init (cairo_win32_device_t *device)
+{
+  device->fallback_gdi = TRUE;
+}
+#endif
+
 static cairo_device_t *__cairo_win32_device;
 
 static cairo_status_t
 _cairo_win32_device_flush (void *device)
 {
+  cairo_win32_device_t *win32_device = device;
+
+  if (!win32_device->fallback_gdi) /* Reverse condition when Direct2D support completed */
     GdiFlush ();
-    return CAIRO_STATUS_SUCCESS;
+
+#ifdef CAIRO_WIN32_DIRECT2D
+  else
+    {
+      D2D1_TAG a, b;
+
+      ID2D1DeviceContext_Flush (win32_device->d2d_device_ctx, &a, &b);
+    }
+#endif
+
+  return CAIRO_STATUS_SUCCESS;
 }
 
 static void
@@ -99,6 +331,7 @@ D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties(D2D1_RENDER_T
 hr = m_pD2DFactory->CreateDCRenderTarget(&props, &device->d2d);
 #endif
 
+/* GDI only! */
 static cairo_bool_t is_win98 (void)
 {
     OSVERSIONINFO os;
@@ -111,6 +344,7 @@ static cairo_bool_t is_win98 (void)
 	    os.dwMinorVersion == 10);
 }
 
+/* only need to check for GDI! */
 static void *
 _cairo_win32_device_get_alpha_blend (cairo_win32_device_t *device)
 {
@@ -142,8 +376,15 @@ _cairo_win32_device_get (void)
 
     device->compositor = _cairo_win32_gdi_compositor_get ();
 
+    /* Establish the ID2D1Factory for our device, if Direct2D enabled */
+    cairo_d2d_init (device);
+
+    /* Activate this if when D2D support done */
+	/* if (device->fallback_gdi)
+         {*/
     device->msimg32_dll = NULL;
     device->alpha_blend = _cairo_win32_device_get_alpha_blend (device);
+       /*{*/
 
     if (_cairo_atomic_ptr_cmpxchg ((void **)&__cairo_win32_device, NULL, device))
 	return cairo_device_reference(&device->base);
@@ -152,6 +393,7 @@ _cairo_win32_device_get (void)
     return cairo_device_reference (__cairo_win32_device);
 }
 
+/* probably not needed for D2D */
 unsigned
 _cairo_win32_flags_for_dc (HDC dc, cairo_format_t format)
 {
