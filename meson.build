@@ -5,7 +5,8 @@ project('cairo', 'c', 'cpp',
 )
 
 # Keep in sync with configure.ac!
-freetype_required_version = '>= 9.7.3'
+freetype_required_version = '>= 9.7.3'        # AKA freetype-2.1.9
+freetype_required_version_cmake = '>= 2.1.9'
 fontconfig_required_version = '>= 2.2.95'
 xrender_required_version = '>= 0.6'
 xcb_required_version = '>= 1.6'
@@ -240,7 +241,9 @@ if zlib_dep.found()
   conf.set('HAVE_ZLIB', 1)
 endif
 
-png_dep = dependency('libpng',
+# CMake use different naming schemes for libpng from pkg-config
+png_pkg = cc.get_argument_syntax() == 'msvc' ? 'png' : 'libpng'
+png_dep = dependency(png_pkg,
   required: get_option('png'),
   fallback: ['libpng', 'libpng_dep']
 )
@@ -303,9 +306,15 @@ if fontconfig_dep.found()
   }]
 endif
 
-freetype_dep = dependency('freetype2',
+# CMake build files use different naming and versioning schemes for FreeType2
+freetype_pkg = cc.get_argument_syntax() == 'msvc' ? 'freetype' : 'freetype2'
+freetype_pkg_ver = cc.get_argument_syntax() == 'msvc' ? \
+  freetype_required_version_cmake : \
+  freetype_required_version
+
+freetype_dep = dependency(freetype_pkg,
   required: get_option('freetype'),
-  version: freetype_required_version,
+  version: freetype_pkg_ver,
   fallback: ['freetype2', 'freetype_dep'],
 )
 if freetype_dep.found()
