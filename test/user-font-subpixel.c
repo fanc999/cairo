@@ -63,6 +63,7 @@ static cairo_test_status_t
 draw (cairo_t *cr, int width, int height)
 {
     cairo_font_face_t *font_face;
+    unsigned i;
 
     cairo_set_source_rgb (cr, 1, 1, 1);
     cairo_paint (cr);
@@ -75,7 +76,7 @@ draw (cairo_t *cr, int width, int height)
     cairo_set_source_rgb (cr, 0, 0, 0);
     cairo_set_font_size (cr, TEXT_SIZE);
 
-    for (unsigned i = 0; i < REPEAT; i++)
+    for (i = 0; i < REPEAT; i++)
     {
       cairo_move_to (cr, BORDER + TEXT_SIZE * i, BORDER + i * .1);
       cairo_show_text (cr, "-");

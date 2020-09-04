@@ -58,7 +58,7 @@ typedef unsigned __int64 uint64_t;
 #define _USE_MATH_DEFINES
 
 #include <float.h>
-#if _MSC_VER <= 1600
+#if _MSC_VER <= 1700
 #define isnan(x) _isnan(x)
 #endif
 

@@ -31,6 +31,7 @@
 static void
 example (cairo_t *cr, const char *name)
 {
+    cairo_pattern_t *pattern;
     cairo_save (cr);
     cairo_push_group_with_content (cr, cairo_surface_get_content (cairo_get_target (cr)));
 
@@ -107,7 +108,7 @@ example (cairo_t *cr, const char *name)
     cairo_set_source_rgba (cr, 0, 0, 0.9, 0.4);
     cairo_fill (cr);
 
-    cairo_pattern_t *pattern = cairo_pop_group (cr);
+    pattern = cairo_pop_group (cr);
     cairo_rectangle (cr, 0, 0, WIDTH, HEIGHT);
     cairo_clip (cr);
     // Make problems with CAIRO_CONTENT_COLOR visible

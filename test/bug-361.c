@@ -48,6 +48,7 @@ static cairo_test_status_t
 draw (cairo_t *cr, int width, int height)
 {
     double bw = 1.5;
+    cairo_pattern_t *mask;
 
     cairo_push_group_with_content (cr, CAIRO_CONTENT_COLOR_ALPHA);
 
@@ -73,7 +74,7 @@ draw (cairo_t *cr, int width, int height)
     cairo_set_source_rgba (cr, 0, 0, 0, 0);
     cairo_fill_preserve (cr);
 
-    cairo_pattern_t *mask = cairo_pop_group (cr);
+    mask = cairo_pop_group (cr);
 
     /* Now actually draw the border via the mask */
     cairo_set_source_rgb (cr, 1, 0, 0);

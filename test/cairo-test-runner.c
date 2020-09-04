@@ -638,7 +638,8 @@ expect_fail_due_to_env_var (cairo_test_context_t *ctx,
 
     /* Look for the test name in the env var (comma separated) */
     if (env) {
-	for (size_t start = 0;; start += strlen (ctx->test_name)) {
+    size_t start;
+	for (start = 0;; start += strlen (ctx->test_name)) {
 	   char *match = strstr (env + start, ctx->test_name);
 	   if (!match)
 	       break;

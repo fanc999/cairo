@@ -28,6 +28,12 @@ static cairo_test_status_t
 draw (cairo_t *cr, int width, int height)
 {
     cairo_matrix_t test_matrix;
+    const cairo_test_context_t *ctx;
+    cairo_surface_t *png_surface;
+    cairo_pattern_t *png_pattern;
+    cairo_matrix_t matrix;
+    cairo_pattern_t *mask_pattern;
+
     test_matrix.xx = 614;
     test_matrix.yx = 0;
     test_matrix.xy = 0;
@@ -36,10 +42,9 @@ draw (cairo_t *cr, int width, int height)
     test_matrix.y0 = 793;
     cairo_set_matrix(cr, &test_matrix);
 
-    const cairo_test_context_t *ctx = cairo_test_get_context (cr);
-    cairo_surface_t *png_surface = cairo_test_create_surface_from_png (ctx, "romedalen.png");
-    cairo_pattern_t *png_pattern = cairo_pattern_create_for_surface(png_surface);
-    cairo_matrix_t matrix;
+    ctx = cairo_test_get_context (cr);
+    png_surface = cairo_test_create_surface_from_png (ctx, "romedalen.png");
+    png_pattern = cairo_pattern_create_for_surface(png_surface);
     matrix.xx = 1228;
     matrix.yx = 0;
     matrix.xy = 0;
@@ -47,7 +52,7 @@ draw (cairo_t *cr, int width, int height)
     matrix.x0 = 0;
     matrix.y0 = 1590;
     cairo_pattern_set_matrix (png_pattern, &matrix);
-    cairo_pattern_t *mask_pattern = cairo_pattern_create_rgba (1.0, 1.0, 1.0, 0.15);
+    mask_pattern = cairo_pattern_create_rgba (1.0, 1.0, 1.0, 0.15);
     cairo_save(cr);
     cairo_set_source(cr, png_pattern);
     cairo_mask(cr, mask_pattern);

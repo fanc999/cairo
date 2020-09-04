@@ -41,7 +41,8 @@
 #define EXPECTED_ERROR (0.5 / (1<<CAIRO_FIXED_FRAC_BITS))
 
 static int compare_points( double *p1, double *p2 ) {
-    for(int i=0; i<2; ++i) {
+    int i;
+    for(i=0; i<2; ++i) {
 	double error = fabs(p2[i]-p1[i]);
 	if(error > EXPECTED_ERROR) {
 	    return 1;
@@ -55,19 +56,19 @@ draw (cairo_t *cr, int width, int height)
 {
     cairo_path_data_t path_data[] = {
 	{ { CAIRO_PATH_MOVE_TO, 2 }, },
-	{ .point={ 95.000000, 40.000000 }, },
+	{ { 95.000000, 40.000000 }, /* point */ },
 
 	{ { CAIRO_PATH_LINE_TO, 2 }, },
-	{ .point={ 94.960533, 41.255810 }, },
+	{ { 94.960533, 41.255810 }, /* point */},
 
 	{ { CAIRO_PATH_LINE_TO, 2 }, },
-	{ .point={ 94.842293, 42.50666 }, },
+	{ { 94.842293, 42.50666 }, /* point */},
 
 	{ { CAIRO_PATH_LINE_TO, 2 }, },
-	{ .point={ 94.645744, 43.747627 }, },
+	{ { 94.645744, 43.747627 }, /* point */},
 
 	{ { CAIRO_PATH_LINE_TO, 2 }, },
-	{ .point={ 94.371666, 44.973797 }, },
+	{ { 94.371666, 44.973797 }, /* point */},
     };
     const cairo_test_context_t *ctx = cairo_test_get_context (cr);
     cairo_path_t path, *path_copy;

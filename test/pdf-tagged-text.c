@@ -370,6 +370,7 @@ draw_cover (cairo_surface_t *surface, cairo_t *cr)
 static void
 create_document (cairo_surface_t *surface, cairo_t *cr)
 {
+    struct section *sect;
     layout_paragraph (cr);
 
     cairo_pdf_surface_set_thumbnail_size (surface, PAGE_WIDTH/10, PAGE_HEIGHT/10);
@@ -429,7 +430,7 @@ create_document (cairo_surface_t *surface, cairo_t *cr)
 
     cairo_tag_begin (cr, CAIRO_TAG_DEST, "name='TOC' internal");
     cairo_tag_begin (cr, "TOC", NULL);
-    const struct section *sect = contents;
+    sect = contents;
     while (sect->heading) {
 	draw_contents (surface, cr, sect);
 	sect++;

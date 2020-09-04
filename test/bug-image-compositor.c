@@ -32,20 +32,22 @@
 static cairo_test_status_t
 draw (cairo_t *cr, int width, int height)
 {
+    cairo_pattern_t *p;
+    int i;
     cairo_set_source_rgb (cr, 0., 0., 0.);
     cairo_paint (cr);
 
     cairo_set_source_rgb (cr, 1., 1., 1.);
     cairo_set_line_width (cr, 1.);
 
-    cairo_pattern_t *p = cairo_pattern_create_linear (0, 0, width, height);
+    p = cairo_pattern_create_linear (0, 0, width, height);
     cairo_pattern_add_color_stop_rgb (p, 0, 0.99, 1, 1);
     cairo_pattern_add_color_stop_rgb (p, 1, 1, 1, 1);
     cairo_set_source (cr, p);
     cairo_pattern_destroy(p);
 
     cairo_move_to (cr, 0.5, -1);
-    for (int i = 0; i < width; i+=3) {
+    for (i = 0; i < width; i+=3) {
 	cairo_rel_line_to (cr, 2, 2);
 	cairo_rel_line_to (cr, 1, -2);
     }

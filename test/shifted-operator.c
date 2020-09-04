@@ -29,6 +29,8 @@ draw (cairo_t *cr, int width, int height)
 {
     cairo_surface_t *recording_surface = cairo_recording_surface_create (CAIRO_CONTENT_COLOR_ALPHA, NULL);
     cairo_t *cr2 = cairo_create (recording_surface);
+    cairo_pattern_t *pattern;
+    cairo_matrix_t matrix;
     cairo_translate (cr2, -30, -30);
     cairo_rectangle (cr2, 0, 0, 120, 90);
     cairo_set_source_rgba (cr2, 0.7, 0, 0, 0.8);
@@ -39,9 +41,8 @@ draw (cairo_t *cr, int width, int height)
     cairo_fill (cr2);
     cairo_destroy (cr2);
 
-    cairo_pattern_t *pattern = cairo_pattern_create_for_surface (recording_surface);
+    pattern = cairo_pattern_create_for_surface (recording_surface);
     cairo_surface_destroy(recording_surface);
-    cairo_matrix_t matrix;
     cairo_matrix_init_translate (&matrix, -30, -30);
     cairo_pattern_set_matrix (pattern, &matrix);
     cairo_set_source (cr, pattern);

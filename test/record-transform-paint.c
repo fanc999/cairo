@@ -28,9 +28,13 @@ static cairo_test_status_t
 draw (cairo_t *cr, int width, int height)
 {
     cairo_surface_t *surface2 = cairo_recording_surface_create (CAIRO_CONTENT_COLOR_ALPHA, NULL);
+    cairo_pattern_t *pattern2;
+	cairo_matrix_t matrix2;
     {
 	cairo_t *cr2 = cairo_create (surface2);
 	cairo_surface_t *surface3 = cairo_recording_surface_create (CAIRO_CONTENT_COLOR_ALPHA, NULL);
+	cairo_pattern_t *pattern3;
+	cairo_matrix_t matrix3;
 	{
 	    cairo_t *cr3 = cairo_create (surface3);
 	    cairo_pattern_t *pattern4 = cairo_pattern_create_linear (0.0, 0.0, width, height);
@@ -39,15 +43,13 @@ draw (cairo_t *cr, int width, int height)
 	    cairo_set_source (cr3, pattern4);
 	    cairo_paint (cr3);
 	}
-	cairo_pattern_t *pattern3 = cairo_pattern_create_for_surface (surface3);
-	cairo_matrix_t matrix3;
+	pattern3 = cairo_pattern_create_for_surface (surface3);
 	cairo_matrix_init_scale (&matrix3, 2, 2);
 	cairo_pattern_set_matrix (pattern3, &matrix3);
 	cairo_set_source (cr2, pattern3);
 	cairo_paint (cr2);
     }
-    cairo_pattern_t *pattern2 = cairo_pattern_create_for_surface (surface2);
-    cairo_matrix_t matrix2;
+    pattern2 = cairo_pattern_create_for_surface (surface2);
     cairo_matrix_init_scale (&matrix2, 5, 5);
     cairo_pattern_set_matrix (pattern2, &matrix2);
     cairo_set_source (cr, pattern2);
