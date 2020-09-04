@@ -40,8 +40,8 @@ main (int argc, char **argv)
 {
     cairo_surface_t *surface = NULL;
     const cairo_script_interpreter_hooks_t hooks = {
-	.closure = &surface,
-	.surface_create = _surface_create,
+	&surface, /* closure */
+	_surface_create, /* surface_create */
     };
     cairo_script_interpreter_t *csi;
     FILE *in = stdin, *out = stdout;
