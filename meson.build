@@ -93,7 +93,12 @@ if cc.get_id() == 'msvc'
   add_project_arguments('/wd4244', '/wd4146',
                         # Don't warn about double -> float truncation
                         '/wd4305',
+                        '/D_CRT_SECURE_NO_WARNINGS',
+                        '/D_CRT_NONSTDC_NO_WARNINGS',
                         language : 'c')
+  if cc.version().version_compare('<19.00')
+    add_project_arguments('/D__func__=__FUNCTION__', language : 'c')
+  endif
 endif
 
 add_project_arguments('-D_GNU_SOURCE', language: 'c')
