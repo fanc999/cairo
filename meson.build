@@ -6,7 +6,8 @@ project('cairo', 'c', 'cpp',
 cc = meson.get_compiler('c')
 
 # Keep in sync with configure.ac!
-freetype_required_version = '>= 9.7.3'
+freetype_required_version = '>= 9.7.3'        # AKA freetype-2.1.9
+freetype_required_version_cmake = '>= 2.1.9'
 fontconfig_required_version = '>= 2.2.95'
 xrender_required_version = '>= 0.6'
 xcb_required_version = '>= 1.6'
@@ -140,9 +141,21 @@ feature_conf = configuration_data()
 built_features = []
 
 zlib_dep = dependency('zlib',
-  required: get_option('zlib'),
-  fallback : ['zlib', 'zlib_dep'],
+  required: false,
 )
+
+if not zlib_dep.found() and cc.get_argument_syntax() == 'msvc'
+  foreach zlib_libname : ['zlib1', 'zdll', 'zlib']
+    if not zlib_dep.found()
+      zlib_dep = cc.find_library(zlib_libname, required: false, has_headers: ['zlib.h'])
+    endif
+  endforeach
+endif
+
+if get_option('zlib').enabled() and not zlib_dep.found()
+  zlib_dep = dependency('zlib', fallback : ['zlib', 'zlib_dep'])
+endif
+
 if zlib_dep.found()
   if zlib_dep.type_name() == 'internal'
     internal_deps += [zlib_dep]
@@ -152,10 +165,33 @@ if zlib_dep.found()
   conf.set('HAVE_ZLIB', 1)
 endif
 
-png_dep = dependency('libpng',
-  required: get_option('png'),
-  fallback: ['libpng', 'png_dep']
-)
+png_dep = dependency('libpng', required: false)
+
+if not png_dep.found() and cc.get_argument_syntax() == 'msvc'
+  if not zlib_dep.found() and not get_option('png').disabled()
+    if get_option('png').enabled()
+      error('libpng support requested but zlib not found')
+	else
+      message('skipping check for libpng support due to lack of zlib')
+    endif
+  else
+    foreach libpng_series : ['16', '15', '14', '13', '12', '10', '']
+      if not png_dep.found()
+        png_dep = cc.find_library('libpng@0@'.format(libpng_series),
+                                   required: false,
+                                   has_headers: ['png.h'])
+      endif
+    endforeach
+  endif
+endif
+
+if not png_dep.found()
+  png_dep = dependency('libpng',
+    required: get_option('png'),
+    fallback: ['libpng', 'png_dep']
+  )
+endif
+
 if png_dep.found()
   feature_conf.set('CAIRO_HAS_SVG_SURFACE', 1)
   feature_conf.set('CAIRO_HAS_PNG_FUNCTIONS', 1)
@@ -209,10 +245,34 @@ if fontconfig_dep.found()
 endif
 
 freetype_dep = dependency('freetype2',
-  required: get_option('freetype'),
+  required: false,
   version: freetype_required_version,
-  fallback: ['freetype2', 'freetype_dep'],
+  method: 'pkg-config'
 )
+
+# CMake build files use different naming and versioning schemes for FreeType2
+if not freetype_dep.found()
+  freetype_dep = dependency('freetype',
+    required: false,
+    version: freetype_required_version_cmake,
+    method: 'cmake'
+  )
+endif
+
+if not freetype_dep.found() and cc.get_argument_syntax() == 'msvc'
+  if not freetype_dep.found() and not get_option('freetype').disabled()
+    freetype_dep = cc.find_library('freetype', required: false, has_headers: ['ft2build.h'])
+  endif
+endif
+
+if not freetype_dep.found()
+  freetype_dep = dependency('freetype2',
+    required: get_option('freetype'),
+    version: freetype_required_version,
+    fallback: ['freetype2', 'freetype_dep'],
+  )
+endif
+
 if freetype_dep.found()
   feature_conf.set('CAIRO_HAS_FT_FONT', 1)
   built_features += [{
