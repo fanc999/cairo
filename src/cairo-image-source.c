@@ -42,6 +42,8 @@
  * compositor interface.
  */
 
+#define _STAT_DEFINED
+
 #include "cairoint.h"
 
 #include "cairo-image-surface-private.h"

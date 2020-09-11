@@ -43,6 +43,8 @@
  * then calls composite.
  */
 
+#define _STAT_DEFINED
+
 #include "cairoint.h"
 
 #include "cairo-clip-inline.h"

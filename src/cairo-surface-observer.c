@@ -33,6 +33,8 @@
  *      Chris Wilson <chris@chris-wilson.co.uk>
  */
 
+#define _STAT_DEFINED
+
 #include "cairoint.h"
 
 #include "cairo-surface-observer-private.h"
