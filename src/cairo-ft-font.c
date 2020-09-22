@@ -397,7 +397,7 @@ _cairo_ft_unscaled_font_init_key (cairo_ft_unscaled_font_t *key,
 				  int			    id,
 				  FT_Face		    face)
 {
-    unsigned long hash;
+    size_t hash;
 
     key->from_face = from_face;
     key->filename = filename;
@@ -407,7 +407,7 @@ _cairo_ft_unscaled_font_init_key (cairo_ft_unscaled_font_t *key,
     hash = _cairo_hash_string (filename);
     /* the constants are just arbitrary primes */
     hash += ((unsigned long) id) * 1607;
-    hash += ((unsigned long) face) * 2137;
+    hash += ((size_t) face) * 2137;
 
     key->base.hash_entry.hash = hash;
 }
