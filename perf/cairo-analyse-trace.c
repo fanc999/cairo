@@ -210,8 +210,8 @@ execute (cairo_perf_t	 *perf,
 {
     char *trace_cpy, *name;
     const cairo_script_interpreter_hooks_t hooks = {
-	.closure = args,
-	.surface_create = surface_create,
+	args, /* closure */
+	surface_create, /* surface_create */
     };
 
     trace_cpy = xstrdup (trace);
