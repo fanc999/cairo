@@ -81,7 +81,7 @@ compare_backends = executable('cairo-perf-compare-backends',
   dependencies: [libcairoperf_dep, cairoboilerplate_dep],
 )
 
-if gtk2_dep.found()
+if gtk2_dep.found() and host_machine.system() != 'windows'
   graph_files = executable('cairo-perf-graph',
     [
       'cairo-perf-graph-files.c',
