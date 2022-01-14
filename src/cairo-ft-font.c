@@ -2500,6 +2500,13 @@ _cairo_ft_scaled_glyph_init_surface (cairo_ft_scaled_font_t     *scaled_font,
     cairo_image_surface_t	*surface;
     cairo_bool_t uses_foreground_color = FALSE;
 
+#ifdef HAVE_FT_PALETTE_SET_FOREGROUND_COLOR
+	FT_LayerIterator  iterator;
+	FT_UInt layer_glyph_index;
+	FT_UInt layer_color_index;
+	FT_Color color;
+#endif
+
     /* Only one info type at a time handled in this function */
     assert (info == CAIRO_SCALED_GLYPH_INFO_COLOR_SURFACE || info == CAIRO_SCALED_GLYPH_INFO_SURFACE);
 
@@ -2511,10 +2518,6 @@ _cairo_ft_scaled_glyph_init_surface (cairo_ft_scaled_font_t     *scaled_font,
 	}
 
 #ifdef HAVE_FT_PALETTE_SET_FOREGROUND_COLOR
-	FT_LayerIterator  iterator;
-	FT_UInt layer_glyph_index;
-	FT_UInt layer_color_index;
-	FT_Color color;
 
 	/* Check if there is a layer that uses the foreground color */
 	iterator.p  = NULL;
