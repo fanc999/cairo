@@ -43,7 +43,6 @@
 #elif HAVE_SYS_INT_TYPES_H
 # include <sys/int_types.h>
 #elif defined(_MSC_VER)
-# include <stdint.h>
   typedef __int8 int8_t;
   typedef unsigned __int8 uint8_t;
   typedef __int16 int16_t;

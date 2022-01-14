@@ -144,11 +144,11 @@ _cairo_boilerplate_svg_finish_surface (cairo_surface_t *surface)
 	 * the offset would be desirable during the copy operation. */
 	double x_offset, y_offset;
 	double x_scale, y_scale;
+	cairo_t *cr;
 	cairo_surface_get_device_offset (surface, &x_offset, &y_offset);
 	cairo_surface_get_device_scale (surface, &x_scale, &y_scale);
 	cairo_surface_set_device_offset (surface, 0, 0);
 	cairo_surface_set_device_scale (surface, 1, 1);
-	cairo_t *cr;
 	cr = cairo_create (ptc->target);
 	cairo_set_source_surface (cr, surface, 0, 0);
 	cairo_paint (cr);
@@ -252,11 +252,12 @@ _cairo_boilerplate_svg_force_fallbacks (cairo_surface_t *abstract_surface,
 {
     svg_target_closure_t *ptc = cairo_surface_get_user_data (abstract_surface,
 							     &svg_closure_key);
+    cairo_paginated_surface_t *paginated;
 
     if (ptc->target)
 	abstract_surface = ptc->target;
 
-    cairo_paginated_surface_t *paginated = (cairo_paginated_surface_t*) abstract_surface;
+    paginated = (cairo_paginated_surface_t*) abstract_surface;
     _cairo_svg_surface_set_force_fallbacks (paginated->target, TRUE);
     cairo_surface_set_fallback_resolution (&paginated->base,
 					   x_pixels_per_inch,
