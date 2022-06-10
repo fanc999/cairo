@@ -128,8 +128,6 @@ check_sizeofs = [
 ]
 
 check_headers = [
-  ['stdint.h'],
-  ['inttypes.h'],
   ['sys/int_types.h'],
   ['fcntl.h'],
   ['unistd.h'],
@@ -157,10 +155,19 @@ check_headers = [
 ]
 
 check_types = [
-  ['uint64_t', {'headers': ['stdint.h']}],
-  ['uint128_t', {'headers': ['stdint.h']}],
   ['__uint128_t']
 ]
+
+if (cc.get_id() == 'msvc' and cc.version().version_compare('>=16.00')) or cc.get_id() != 'msvc'
+  check_headers += [['stdint.h']]
+  check_types += [
+    ['uint64_t', {'headers': ['stdint.h']}],
+    ['uint128_t', {'headers': ['stdint.h']}]
+  ]
+endif
+if (cc.get_id() == 'msvc' and cc.version().version_compare('>=18.00')) or cc.get_id() != 'msvc'
+  check_headers += [['inttypes.h']]
+endif
 
 check_funcs = [
   'alarm',
