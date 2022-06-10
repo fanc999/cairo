@@ -43,7 +43,18 @@
 #include "config.h"
 
 #include <stddef.h> /* size_t */
+#ifdef HAVE_STDINT_H
 #include <stdint.h> /* SIZE_MAX */
+#elif defined _MSC_VER
+#include <limits.h>
+#ifndef SIZE_MAX // [
+#  ifdef _WIN64 // [
+#     define SIZE_MAX  _UI64_MAX
+#  else // _WIN64 ][
+#     define SIZE_MAX  _UI32_MAX
+#  endif // _WIN64 ]
+#endif // SIZE_MAX ]
+#endif
 
 /* Size in bytes of buffer to use off the stack per functions.
  * Mostly used by text functions.  For larger allocations, they'll

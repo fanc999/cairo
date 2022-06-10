@@ -39,7 +39,9 @@
  */
 
 #include "cairoint.h"
+#ifdef HAVE_STDINT_H
 #include <stdint.h>
+#endif
 #include "cairo-error-private.h"
 #include "cairo-gl-gradient-private.h"
 #include "cairo-gl-private.h"
