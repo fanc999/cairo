@@ -800,12 +800,12 @@ _cairo_scaled_font_init (cairo_scaled_font_t               *scaled_font,
 
 static void _cairo_scaled_font_free_recording_surfaces (cairo_scaled_font_t *scaled_font)
 {
-    int num_recording_surfaces;
+    int num_recording_surfaces, i;
     cairo_surface_t *surface;
 
     num_recording_surfaces = _cairo_array_num_elements (&scaled_font->recording_surfaces_to_free);
     if (num_recording_surfaces > 0) {
-	for (int i = 0; i < num_recording_surfaces; i++) {
+	for (i = 0; i < num_recording_surfaces; i++) {
 	    _cairo_array_copy_element (&scaled_font->recording_surfaces_to_free, i, &surface);
 	    cairo_surface_finish (surface);
 	    cairo_surface_destroy (surface);
