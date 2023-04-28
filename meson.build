@@ -266,9 +266,7 @@ endif
 # Don't build fontconfig as a subproject on Windows unless
 # explicitly requested
 fontconfig_option = get_option('fontconfig')
-if host_machine.system() == 'windows' and not fontconfig_option.enabled()
-  fontconfig_option = false
-endif
+fontconfig_option = fontconfig_option.disable_auto_if(host_machine.system() == 'windows')
 
 fontconfig_dep = dependency('fontconfig',
   required: fontconfig_option,
